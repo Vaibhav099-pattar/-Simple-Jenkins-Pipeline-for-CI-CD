@@ -1,0 +1,77 @@
+pipeline {
+    agent any
+
+    environment {
+        DOCKER_IMAGE = devbanglore/nodejs-demo-app:${GIT_COMMIT}'
+        DOCKER_CREDENTIALS_ID = 'devbanglore'
+
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                script {
+                    try {
+                        sh 'git clone https://github.com/Vaibhav099-pattar/ '
+                        dir('your-repo') {
+                            sh 'git checkout your-branch'
+                        }
+                    } catch (Exception e) {
+                        error "Checkout failed: ${e.message}"
+                    }
+                }
+            }
+        }
+
+        stage('Build') {
+            steps {
+                script {
+                    try {
+                        sh 'docker build -t $DOCKER_IMAGE .'
+                    } catch (Exception e) {
+                        error "Build failed: ${e.message}"
+                    }
+                }
+            }
+        }
+
+        stage('Test') {
+            steps {
+                script {
+                    try {
+                        sh 'docker run --rm $DOCKER_IMAGE npm test'
+                    } catch (Exception e) {
+                        error "Test failed: ${e.message}"
+                    }
+                }
+            }
+        }
+
+        stage('Deploy') {
+            steps {
+                script {
+                    try {
+                        withCredentials([usernamePassword(credentialsId: DOCKER_CREDENTIALS_ID, usernameVariable: 'devbanglore', passwordVariable: 'PASSWORD')]) {
+                            sh 'echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin'
+                            sh 'docker push $DOCKER_IMAGE'
+                        }
+                    } catch (Exception e) {
+                        error "Deployment failed: ${e.message}"
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'Pipeline completed successfully!'
+        }
+        failure {
+            echo 'Pipeline failed!'
+            mail to: 'dev-team@example.com',
+                 subject: "Build Failed: ${currentBuild.fullDisplayName}",
+                 body: "Check console output at ${env.BUILD_URL} for details."
+        }
+    }
+}
